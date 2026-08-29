@@ -1,3 +1,9 @@
-import { type RouteConfig, index } from "@react-router/dev/routes";
+import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
-export default [index("routes/home.tsx")] satisfies RouteConfig;
+export default [
+  // صفحه اصلی (لندینگ پیج)
+  index("routes/home.tsx"),
+
+  // مسیر اپلیکیشن چت
+  route("chat", "routes/chat.tsx"),
+] satisfies RouteConfig;

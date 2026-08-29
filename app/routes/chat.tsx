@@ -1,0 +1,8 @@
+// صفحه اصلی چت (فعلاً به صورت کلاینت‌ساید)
+export default function ChatPage() {
+  return (
+    <div className="flex h-screen items-center justify-center">
+      <h2 className="text-2xl font-semibold">محیط چت (به زودی تکمیل می‌شود)</h2>
+    </div>
+  );
+}

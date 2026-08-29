@@ -1,15 +1,63 @@
 @import "tailwindcss";
 
+/* تنظیمات Tailwind برای فونت‌ها */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-en: "Space Grotesk", sans-serif;
+  --font-fa: "Vazirmatn", sans-serif;
+  
+  /* تعریف رنگ‌های برندNexChat */
+  --color-brand-50: #eef3ff;
+  --color-brand-100: #d9e2ff;
+  --color-brand-200: #bbc9ff;
+  --color-brand-300: #8da4ff;
+  --color-brand-400: #5c78ff;
+  --color-brand-500: #3b50e6; /* رنگ اصلی */
+  --color-brand-600: #2a38b8;
+  --color-brand-700: #1e2c8f;
+  --color-brand-800: #1a256e;
+  --color-brand-900: #0f1747;
 }
 
-html,
-body {
-  @apply bg-white dark:bg-gray-950;
+/* متغیرهای CSS برای تم لایت و دارک */
+:root {
+  --bg-p: #f8f9fa;
+  --bg-s: #f0f1f3;
+  --bg-c: #ffffff;
+  --tx-p: #1a1c22;
+  --tx-s: #555a64;
+  --bc: #e3e5e9; /* Border Color */
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+.dark {
+  --bg-p: #0d0f14;
+  --bg-s: #14171e;
+  --bg-c: #0d0f14;
+  --tx-p: #e8eaf0;
+  --tx-s: #b0b6bf;
+  --bc: #252a35;
+}
+
+/* تنظیمات پایه بدن */
+@layer base {
+  *, ::after, ::before {
+    box-sizing: border-box;
+  }
+  
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-p);
+    color: var(--tx-p);
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  /* تنظیم فونت بر اساس جهت متن */
+  [dir="rtl"] {
+    font-family: var(--font-fa);
+  }
+  [dir="ltr"] {
+    font-family: var(--font-en);
   }
 }
