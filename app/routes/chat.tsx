@@ -1,20 +1,25 @@
+'use client';
+
 import React from "react";
 import { Sidebar } from "~/components/layout/Sidebar";
+import { WelcomeScreen } from "~/components/chat/WelcomeScreen";
+import { ChatInput } from "~/components/chat/ChatInput";
+// ۱. ایمپورت MessageList
+import { MessageList } from "~/components/chat/MessageList";
 import { useUI } from "~/context/UIContext";
+import { useChat } from "~/context/ChatContext";
 
 export default function ChatPage() {
   const { toggleMobileSidebar } = useUI();
+  const { activeChatId } = useChat();
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-p)]">
-      {/* ۱. اضافه کردن سایدبار به لیوت */}
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-p)] font-fa">
       <Sidebar />
 
-      {/* ۲. بخش محتوای اصلی (هدر + چت) */}
-      <main className="main-area flex-1 min-w-0 flex flex-col h-full relative border-s border-[var(--bc)]">
+      <main className="main-area flex-1 min-w-0 flex flex-col h-full relative md:border-s md:border-[var(--bc)] bg-[var(--bg-sb)] dark:bg-[var(--bg-p)] transition-all duration-300">
         
-        {/* هدر داخلی چت (فعلاً ساده) */}
-        <header className="flex items-center justify-between px-3 sm:px-4 py-3 border-b border-[var(--bc)] bg-[var(--bg-c)]">
+        <header className="flex items-center justify-between px-3 sm:px-4 py-3 border-b border-[var(--bc)] bg-[var(--bg-c)] transition-all">
           <div className="flex items-center gap-2 sm:gap-3">
             <button onClick={toggleMobileSidebar} className="hdr-icon md:hidden">
               <i className="fa-solid fa-bars text-base"></i>
@@ -34,12 +39,17 @@ export default function ChatPage() {
           </div>
         </header>
 
-        {/* بخش پیام‌ها (فعلاً آزمایشی) */}
-        <div className="flex-1 overflow-y-auto h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-[var(--bg-p)]">
-           <i className="fa-regular fa-comments text-6xl text-[var(--tx-m)] opacity-60"></i>
-           <h2 className="text-xl font-bold">به محیط چت خوش آمدید</h2>
-           <p className="text-sm text-[var(--tx-s)] max-w-sm">یکی از چت‌های قبلی را انتخاب کنید یا با کلیک روی "چت جدید"، یک مکالمه تازه شروع کنید.</p>
+        {/* ۲. رندر داینامیک: اگر چتی نبود WelcomeScreen، در غیر این صورت MessageList */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden h-full scroll-smooth">
+          {activeChatId === null ? (
+            <WelcomeScreen />
+          ) : (
+            <MessageList />
+          )}
         </div>
+
+        <ChatInput />
+        
       </main>
     </div>
   );
