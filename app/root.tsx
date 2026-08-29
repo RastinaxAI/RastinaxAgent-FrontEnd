@@ -14,7 +14,11 @@ import "./app.css";
 // ایمپورت پرووایدرهای کانتکست
 import { UIProvider, useUI } from "./context/UIContext";
 import { ChatProvider } from "./context/ChatContext";
-import { AuthProvider } from "./context/AuthContext"; // اضافه شدن AuthProvider
+import { AuthProvider } from "./context/AuthContext";
+import { ModalProvider } from "./context/ModalContext"; // این ایمپورت جا افتاده بود
+
+// ایمپورت کامپوننت‌های سراسری (مودال‌ها)
+import { AuthModal } from "./components/modals/AuthModal";
 
 export const links = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -40,7 +44,10 @@ export default function App() {
     <UIProvider>
       <AuthProvider>
         <ChatProvider>
-          <AppContent />
+          {/* اضافه شدن ModalProvider به درخت کانتکست‌ها */}
+          <ModalProvider>
+            <AppContent />
+          </ModalProvider>
         </ChatProvider>
       </AuthProvider>
     </UIProvider>
@@ -62,6 +69,10 @@ function AppContent() {
       </head>
       <body className="antialiased overflow-hidden h-full">
         <Outlet />
+        
+        {/* قرار دادن AuthModal در بالاترین سطح بدنه صفحه */}
+        <AuthModal />
+        
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -70,13 +81,10 @@ function AppContent() {
 }
 
 /**
- * کامپوننت ErrorBoundary اصلاح‌شده
- * هوک useUI از اینجا حذف شد تا بیرون از کانتکست کرش نکند
+ * کامپوننت ErrorBoundary برای مدیریت خطاهای سراسری
  */
 export function ErrorBoundary() {
   const error = useRouteError();
-  
-  // استفاده از مقادیر پیش‌فرض ثابت و ایمن برای صفحه خطا
   const fallbackLang = 'fa';
   
   return (
