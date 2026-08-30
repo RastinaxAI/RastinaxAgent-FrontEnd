@@ -15,10 +15,11 @@ import "./app.css";
 import { UIProvider, useUI } from "./context/UIContext";
 import { ChatProvider } from "./context/ChatContext";
 import { AuthProvider } from "./context/AuthContext";
-import { ModalProvider } from "./context/ModalContext"; // این ایمپورت جا افتاده بود
+import { ModalProvider } from "./context/ModalContext";
 
 // ایمپورت کامپوننت‌های سراسری (مودال‌ها)
 import { AuthModal } from "./components/modals/AuthModal";
+import { PlansModal } from "./components/modals/PlansModal";
 
 export const links = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -41,16 +42,15 @@ export const meta = () => [
  */
 export default function App() {
   return (
-    <UIProvider>
-      <AuthProvider>
-        <ChatProvider>
-          {/* اضافه شدن ModalProvider به درخت کانتکست‌ها */}
-          <ModalProvider>
-            <AppContent />
-          </ModalProvider>
-        </ChatProvider>
-      </AuthProvider>
-    </UIProvider>
+      <UIProvider>
+        <AuthProvider>
+          <ChatProvider>
+            <ModalProvider>
+              <AppContent />
+            </ModalProvider>
+          </ChatProvider>
+        </AuthProvider>
+      </UIProvider>
   );
 }
 
@@ -59,24 +59,25 @@ export default function App() {
  */
 function AppContent() {
   const { lang, theme } = useUI();
-  
+
   return (
-    <html lang={lang} dir={lang === 'fa' ? 'rtl' : 'ltr'} className={`${theme} overflow-hidden h-full`}>
+      <html lang={lang} dir={lang === 'fa' ? 'rtl' : 'ltr'} className={`${theme} overflow-hidden h-full`}>
       <head>
         <Meta />
         <Links />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
       </head>
       <body className="antialiased overflow-hidden h-full">
-        <Outlet />
-        
-        {/* قرار دادن AuthModal در بالاترین سطح بدنه صفحه */}
-        <AuthModal />
-        
-        <ScrollRestoration />
-        <Scripts />
+      <Outlet />
+
+      {/* قرار دادن مودال‌ها در بالاترین سطح بدنه صفحه */}
+      <AuthModal />
+      <PlansModal />
+
+      <ScrollRestoration />
+      <Scripts />
       </body>
-    </html>
+      </html>
   );
 }
 
@@ -85,10 +86,10 @@ function AppContent() {
  */
 export function ErrorBoundary() {
   const error = useRouteError();
-  const fallbackLang = 'fa';
-  
+  const fallbackLang = 'fa'; // مقدار ایمن و خارج از کانتکست
+
   return (
-    <html lang={fallbackLang} dir="rtl" className="light overflow-hidden h-full">
+      <html lang={fallbackLang} dir="rtl" className="light overflow-hidden h-full">
       <head>
         <title>خطایی رخ داد! | NexChat</title>
         <Meta />
@@ -96,35 +97,35 @@ export function ErrorBoundary() {
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
       </head>
       <body className="antialiased h-screen flex flex-col items-center justify-center gap-6 p-6 bg-[#f8f9fa] text-[#1a1c22] font-fa">
-        <i className="fa-solid fa-circle-exclamation text-8xl text-red-500 opacity-80"></i>
-        
-        {isRouteErrorResponse(error) ? (
+      <i className="fa-solid fa-circle-exclamation text-8xl text-red-500 opacity-80"></i>
+
+      {isRouteErrorResponse(error) ? (
           <>
             <h1 className="text-6xl font-extrabold text-[#3b50e6]">
               {error.status}
             </h1>
             <p className="text-xl text-[#555a64]">
-              {error.status === 404 
-                ? "متأسفانه صفحه مورد نظر شما پیدا نشد."
-                : error.statusText}
+              {error.status === 404
+                  ? "متأسفانه صفحه مورد نظر شما پیدا نشد."
+                  : error.statusText}
             </p>
           </>
-        ) : error instanceof Error ? (
+      ) : error instanceof Error ? (
           <>
             <h1 className="text-2xl font-bold text-red-600">خطای غیرمنتظره رخ داد!</h1>
             <pre className="bg-red-50 p-4 rounded-xl text-sm overflow-auto max-w-full font-en shadow-inner text-left" dir="ltr">
               {error.message}
             </pre>
           </>
-        ) : (
+      ) : (
           <h1 className="text-2xl font-bold text-[#1a1c22]">خطای ناشناخته!</h1>
-        )}
-        
-        <a href="/" className="mt-6 px-6 py-3 bg-[#3b50e6] text-white rounded-xl hover:bg-[#2a38b8] transition">
-          بازگشت به صفحه اصلی
-        </a>
-        <Scripts />
+      )}
+
+      <a href="/" className="mt-6 px-6 py-3 bg-[#3b50e6] text-white rounded-xl hover:bg-[#2a38b8] transition">
+        بازگشت به صفحه اصلی
+      </a>
+      <Scripts />
       </body>
-    </html>
+      </html>
   );
 }
