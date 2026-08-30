@@ -1,9 +1,7 @@
 import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
-  // صفحه اصلی (لندینگ پیج)
   index("routes/home.tsx"),
-
-  // مسیر اپلیکیشن چت
   route("chat", "routes/chat.tsx"),
+  route("api/chat", "routes/api.chat.ts"), // اضافه شدن مسیر بک‌اند
 ] satisfies RouteConfig;

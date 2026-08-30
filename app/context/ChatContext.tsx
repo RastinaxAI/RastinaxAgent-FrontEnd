@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Message, ChatSession } from '../types/chat';
-// ۱. هوک جدید را ایمپورت کنید
 import { useChatHistory } from '../hooks/useChatHistory';
 
 export type InputMode = 'chat' | 'image' | 'video';
@@ -24,17 +23,13 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const ChatProvider = ({ children }: { children: ReactNode }) => {
-  // ۲. جایگزین کردن useState با هوک useChatHistory
   const { chats, setChats, isLoaded } = useChatHistory();
-
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [inputMode, setInputMode] = useState<InputMode>('chat');
 
-  // ۳. انتخاب خودکار آخرین چت در زمان لود شدن (اختیاری)
   useEffect(() => {
     if (isLoaded && chats.length > 0 && !activeChatId) {
-      // اگر دوست ندارید آخرین چت خودکار باز شود، می‌توانید این بخش را پاک کنید
       setActiveChatId(chats[0].id);
     }
   }, [isLoaded, chats, activeChatId]);
@@ -48,7 +43,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       messages: [],
       createdAt: Date.now(),
     };
-    // اضافه کردن چت جدید به ابتدای لیست
     setChats(prev => [newChat, ...prev]);
     setActiveChatId(newChat.id);
     setInputMode('chat');
@@ -61,25 +55,29 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteChat = (id: string) => {
     setChats(prev => prev.filter(c => c.id !== id));
-    if (activeChatId === id) {
-      setActiveChatId(null);
-    }
+    if (activeChatId === id) setActiveChatId(null);
   };
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isGenerating) return;
 
     let currentId = activeChatId;
+    let currentChatMessages: Message[] = [];
+
+    // اگر چت فعالی وجود ندارد، یکی می‌سازیم
     if (!currentId) {
       const newChat: ChatSession = {
         id: Date.now().toString(36) + Math.random().toString(36).substring(2),
-        title: text.substring(0, 30), // عنوان چت از روی پیام اول ساخته می‌شود
+        title: text.substring(0, 30),
         messages: [],
         createdAt: Date.now(),
       };
       setChats(prev => [newChat, ...prev]);
       setActiveChatId(newChat.id);
       currentId = newChat.id;
+    } else {
+      const chat = chats.find(c => c.id === currentId);
+      if (chat) currentChatMessages = chat.messages;
     }
 
     const userMsg: Message = {
@@ -88,44 +86,85 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       content: text,
     };
 
+    // پیام کاربر را فوراً به صفحه اضافه می‌کنیم
     setChats(prev =>
         prev.map(c => (c.id === currentId ? { ...c, messages: [...c.messages, userMsg] } : c))
     );
 
     setIsGenerating(true);
 
-    setTimeout(() => {
-      let aiMsg: Message;
+    try {
+      if (inputMode === 'chat') {
+        // ۱. آماده‌سازی تاریخچه چت برای ارسال به بک‌اند
+        const history = currentChatMessages.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }],
+        }));
 
-      if (inputMode === 'image') {
-        const seed = Math.floor(Math.random() * 1000);
-        aiMsg = {
-          id: Date.now().toString(36) + Math.random().toString(36).substring(2),
-          role: 'image',
-          content: `https://picsum.photos/seed/${seed}/512/512`,
-          prompt: text
-        };
-      } else if (inputMode === 'video') {
-        aiMsg = {
+        // ۲. ارسال درخواست امن به مسیر بک‌اند اختصاصی (/api/chat)
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, history }),
+        });
+
+        const data = await response.json();
+
+        // بررسی خطای احتمالی از سمت سرور
+        if (!response.ok) {
+          throw new Error(data.error || 'پاسخی از سرور دریافت نشد');
+        }
+
+        const aiMsg: Message = {
           id: Date.now().toString(36) + Math.random().toString(36).substring(2),
           role: 'ai',
-          content: '🎬 **ویدیو شما در حال پردازش است...**\n\nبسته به حجم درخواست، این فرایند ممکن است چند دقیقه طول بکشد.',
+          content: data.text,
         };
+
+        // ۳. اضافه کردن پاسخ هوش مصنوعی به صفحه
+        setChats(prev =>
+            prev.map(c => (c.id === currentId ? { ...c, messages: [...c.messages, aiMsg] } : c))
+        );
+
       } else {
-        aiMsg = {
-          id: Date.now().toString(36) + Math.random().toString(36).substring(2),
-          role: 'ai',
-          content: `این پاسخ شبیه‌سازی شده هوش مصنوعی برای: "${text}" است.`,
-        };
+        // برای حالت تصویر و ویدیو، به دلیل عدم پشتیبانی مستقیم جمنای از تصویرسازی، شبیه‌سازی را نگه می‌داریم
+        setTimeout(() => {
+          let mediaMsg: Message;
+          if (inputMode === 'image') {
+            const seed = Math.floor(Math.random() * 1000);
+            mediaMsg = {
+              id: Date.now().toString(36),
+              role: 'image',
+              content: `https://picsum.photos/seed/${seed}/512/512`,
+              prompt: text
+            };
+          } else {
+            mediaMsg = {
+              id: Date.now().toString(36),
+              role: 'ai',
+              content: '🎬 **ویدیو شما در حال پردازش است...**',
+            };
+          }
+          setChats(prev => prev.map(c => (c.id === currentId ? { ...c, messages: [...c.messages, mediaMsg] } : c)));
+          setIsGenerating(false);
+        }, 1500);
+        return; // خروج از تابع برای حالت‌های مدیا
       }
+    } catch (error) {
+      console.error("ارتباط با سرور قطع شد:", error);
 
+      const errorMsg: Message = {
+        id: Date.now().toString(36),
+        role: 'ai',
+        content: '⚠️ **خطا در ارتباط با سرور.** لطفاً اتصال اینترنت خود را بررسی کنید یا مطمئن شوید کلید API در سرور به درستی تنظیم شده است.',
+      };
       setChats(prev =>
-          prev.map(c => (c.id === currentId ? { ...c, messages: [...c.messages, aiMsg] } : c))
+          prev.map(c => (c.id === currentId ? { ...c, messages: [...c.messages, errorMsg] } : c))
       );
-
+    } finally {
       setIsGenerating(false);
       setInputMode('chat');
-    }, 1200);
+    }
   };
 
   const value = {
