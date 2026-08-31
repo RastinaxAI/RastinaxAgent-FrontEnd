@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { ChatSession } from '~/types/chat';
-
-const STORAGE_KEY = 'nexchat_history';
+import { STORAGE_KEYS } from '~/lib/constants';
 
 export const useChatHistory = () => {
     // استیت اصلی برای نگهداری چت‌ها
@@ -14,9 +13,12 @@ export const useChatHistory = () => {
     // ۱. خواندن اطلاعات از LocalStorage در زمان لود شدن برنامه
     useEffect(() => {
         try {
-            const storedChats = localStorage.getItem(STORAGE_KEY);
+            const storedChats = localStorage.getItem(STORAGE_KEYS.chatHistory);
             if (storedChats) {
-                setChats(JSON.parse(storedChats));
+                const parsed = JSON.parse(storedChats);
+                if (Array.isArray(parsed)) {
+                    setChats(parsed);
+                }
             }
         } catch (error) {
             console.error('خطا در بارگذاری تاریخچه چت‌ها:', error);
@@ -28,7 +30,7 @@ export const useChatHistory = () => {
     useEffect(() => {
         // فقط زمانی ذخیره کن که اطلاعات اولیه لود شده باشه
         if (isLoaded) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
+            localStorage.setItem(STORAGE_KEYS.chatHistory, JSON.stringify(chats));
         }
     }, [chats, isLoaded]);
 

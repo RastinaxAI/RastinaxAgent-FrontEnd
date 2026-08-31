@@ -1,169 +1,239 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ClipboardEvent, KeyboardEvent } from 'react';
 import { useModal } from '~/context/ModalContext';
 import { useAuth } from '~/context/AuthContext';
 import { useUI } from '~/context/UIContext';
+import { useToast } from '~/components/ui/Toast';
+import { getTranslations } from '~/lib/i18n';
 
-export const AuthModal: React.FC = () => {
+export function AuthModal() {
   const { activeModal, closeModal } = useModal();
   const { login } = useAuth();
   const { lang } = useUI();
-
+  const { showToast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '']);
   const [error, setError] = useState(false);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const translations = getTranslations(lang);
 
-  // ریست کردن استیت‌ها وقتی مودال باز می‌شه
   useEffect(() => {
-    if (activeModal === 'auth') {
-      setStep(1);
-      setPhone('');
-      setOtp(['', '', '', '', '']);
-      setError(false);
-    }
+    if (activeModal !== 'auth') return;
+
+    setStep(1);
+    setPhone('');
+    setOtp(['', '', '', '', '']);
+    setError(false);
+    const timeout = window.setTimeout(() => phoneInputRef.current?.focus(), 300);
+    return () => window.clearTimeout(timeout);
   }, [activeModal]);
 
-  // اگر مودال فعال لاگین نیست، چیزی رندر نکن
   if (activeModal !== 'auth') return null;
 
+  const clearOtp = () => {
+    setOtp(['', '', '', '', '']);
+    setError(false);
+  };
+
   const handleSendCode = () => {
-    if (phone.length === 10) setStep(2);
+    if (phone.length !== 11) return;
+    setStep(2);
+    clearOtp();
+    window.setTimeout(() => otpRefs.current[0]?.focus(), 300);
   };
 
   const handleVerify = () => {
     const code = otp.join('');
-    // کد تستی برای لاگین 11111 است
-    if (code === '11111') {
-      setError(false);
-      setStep(3);
-      login(`+98 ${phone}`);
-      // بعد از ۱.۵ ثانیه مودال رو ببند
-      setTimeout(() => closeModal(), 1500);
-    } else {
+    if (code !== '11111') {
+      clearOtp();
       setError(true);
-      setOtp(['', '', '', '', '']);
+      window.setTimeout(() => otpRefs.current[0]?.focus(), 0);
+      return;
     }
+
+    login(phone);
+    setStep(3);
+    showToast(translations.common.loginSuccess);
+    window.setTimeout(closeModal, 1200);
   };
 
   const handleOtpChange = (index: number, value: string) => {
-    const newOtp = [...otp];
-    newOtp[index] = value.replace(/\D/g, '').slice(-1);
-    setOtp(newOtp);
+    const digits = value.replace(/\D/g, '');
+    if (!digits) {
+      setOtp((current) => current.map((digit, i) => (i === index ? '' : digit)));
+      return;
+    }
 
-    // فوکوس خودکار روی اینپوت بعدی
-    if (value && index < 4) {
-      const nextInput = document.getElementById(`otp-${index + 1}`);
-      nextInput?.focus();
+    const nextOtp = [...otp];
+    digits
+      .slice(0, 5 - index)
+      .split('')
+      .forEach((digit, offset) => {
+        nextOtp[index + offset] = digit;
+      });
+    setOtp(nextOtp);
+
+    const nextIndex = Math.min(index + digits.length, 4);
+    otpRefs.current[nextIndex]?.focus();
+  };
+
+  const handleOtpKeyDown = (
+    index: number,
+    event: KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key === 'Backspace' && !otp[index] && index > 0) {
+      const previousIndex = index - 1;
+      setOtp((current) =>
+        current.map((digit, i) => (i === previousIndex ? '' : digit)),
+      );
+      otpRefs.current[previousIndex]?.focus();
     }
   };
 
+  const handleOtpPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    const digits = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 5);
+    if (!digits) return;
+    setOtp(digits.split('').concat(['', '', '', '', '']).slice(0, 5));
+    otpRefs.current[Math.min(digits.length, 4)]?.focus();
+  };
+
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm fade-in-up" onClick={closeModal}>
-      {/* جلوگیری از بسته شدن مودال وقتی روی خود کارت کلیک می‌شه */}
-      <div className="bg-[var(--bg-c)] border border-[var(--bc)] rounded-[20px] w-full max-w-sm shadow-2xl overflow-hidden relative" onClick={(e) => e.stopPropagation()}>
-        
+    <div
+      className="modal-overlay active"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) closeModal();
+      }}
+    >
+      <div
+        className="modal-card max-w-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="p-6 sm:p-8">
-          {/* هدر مودال */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-[var(--tx-p)]">
-              {lang === 'fa' ? 'ورود به NexChat' : 'Login to NexChat'}
+          <div className="mb-6 flex items-center justify-between">
+            <h2 id="auth-modal-title" className="text-xl font-bold text-[var(--tx-p)]">
+              {translations.auth.title}
             </h2>
-            <button onClick={closeModal} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-h)] text-[var(--tx-s)] transition-colors">
-              <i className="fa-solid fa-xmark"></i>
+            <button
+              type="button"
+              className="hdr-icon"
+              aria-label={translations.common.close}
+              onClick={closeModal}
+            >
+              <i className="fa-solid fa-xmark" />
             </button>
           </div>
 
-          {/* مرحله ۱: دریافت شماره موبایل */}
           {step === 1 && (
             <div className="fade-in-up">
-              <p className="text-sm text-[var(--tx-s)] mb-4">
-                {lang === 'fa' ? 'شماره موبایل خود را وارد کنید' : 'Enter your phone number'}
+              <p className="mb-4 text-sm text-[var(--tx-s)]">
+                {translations.auth.description}
               </p>
-              <div className="flex flex-row-reverse gap-2 mb-4" dir="ltr">
-                <input 
-                  type="tel" 
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="9123456789"
-                  className="flex-1 bg-[var(--bg-s)] border-2 border-[var(--bc)] rounded-xl px-4 py-3 text-base text-[var(--tx-p)] outline-none focus:border-brand-500 transition-colors"
-                />
-                <div className="flex items-center gap-1 px-3 py-3 bg-[var(--bg-t)] rounded-xl text-sm font-medium border-2 border-transparent">
-                  <span>🇮🇷</span><span>+98</span>
-                </div>
-              </div>
-              <button 
+              <input
+                ref={phoneInputRef}
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                maxLength={11}
+                value={phone}
+                placeholder="09123456789"
+                className="phone-input mb-4"
+                dir="ltr"
+                onChange={(event) =>
+                  setPhone(event.target.value.replace(/\D/g, '').slice(0, 11))
+                }
+              />
+              <button
+                type="button"
+                className="plan-cta plan-cta-primary"
+                disabled={phone.length < 11}
                 onClick={handleSendCode}
-                disabled={phone.length < 10}
-                className="w-full py-3 rounded-xl font-semibold text-sm transition-all bg-brand-500 text-white disabled:bg-[var(--bg-t)] disabled:text-[var(--tx-m)] disabled:cursor-not-allowed hover:bg-brand-600"
               >
-                {lang === 'fa' ? 'ارسال کد' : 'Send Code'}
+                {translations.auth.sendCode}
               </button>
             </div>
           )}
 
-          {/* مرحله ۲: دریافت کد تایید */}
           {step === 2 && (
             <div className="fade-in-up">
-              <p className="text-sm text-[var(--tx-s)] mb-1">
-                {lang === 'fa' ? 'کد ارسال شده به' : 'Code sent to'}
+              <p className="mb-1 text-sm text-[var(--tx-s)]">
+                {translations.auth.otpDescription}
               </p>
-              <p className="text-sm font-semibold mb-5 text-[var(--tx-p)]" dir="ltr">
-                +98 {phone}
+              <p className="mb-5 text-sm font-semibold text-[var(--tx-p)]" dir="ltr">
+                {phone}
               </p>
-              
-              <div className="flex justify-center gap-2 mb-4" dir="ltr">
-                {otp.map((digit, i) => (
+
+              <div className="mb-4 flex justify-center gap-2" dir="ltr">
+                {otp.map((digit, index) => (
                   <input
-                    key={i}
-                    id={`otp-${i}`}
+                    key={index}
+                    ref={(element) => {
+                      otpRefs.current[index] = element;
+                    }}
                     type="text"
-                    maxLength={1}
+                    inputMode="numeric"
+                    autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                    maxLength={5}
                     value={digit}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-[var(--bc)] rounded-xl bg-[var(--bg-s)] text-[var(--tx-p)] outline-none focus:border-brand-500 transition-colors"
+                    className={`otp-box ${digit ? 'filled' : ''}`}
+                    aria-label={`${lang === 'fa' ? 'رقم' : 'Digit'} ${index + 1}`}
+                    onChange={(event) => handleOtpChange(index, event.target.value)}
+                    onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                    onPaste={handleOtpPaste}
                   />
                 ))}
               </div>
 
               {error && (
-                <p className="text-red-500 text-sm text-center mb-3">
-                  {lang === 'fa' ? 'کد نامعتبر است (کد تستی: 11111)' : 'Invalid code (Test code: 11111)'}
+                <p className="mb-3 text-center text-sm text-red-500">
+                  {translations.auth.otpError}
                 </p>
               )}
 
-              <button 
+              <button
+                type="button"
+                className="plan-cta plan-cta-primary"
+                disabled={otp.join('').length !== 5}
                 onClick={handleVerify}
-                disabled={otp.join('').length < 5}
-                className="w-full py-3 rounded-xl font-semibold text-sm transition-all bg-brand-500 text-white disabled:bg-[var(--bg-t)] disabled:text-[var(--tx-m)] disabled:cursor-not-allowed hover:bg-brand-600 mb-3"
               >
-                {lang === 'fa' ? 'تایید' : 'Verify'}
+                {translations.auth.verify}
               </button>
-
-              <button onClick={() => setStep(1)} className="w-full text-sm text-[var(--tx-m)] hover:text-[var(--tx-p)] transition-colors">
-                {lang === 'fa' ? 'تغییر شماره' : 'Change number'}
+              <button
+                type="button"
+                className="mt-3 w-full border-0 bg-transparent text-sm text-[var(--tx-m)] transition-colors hover:text-[var(--tx-p)]"
+                onClick={() => {
+                  setStep(1);
+                  clearOtp();
+                }}
+              >
+                {translations.auth.changeNumber}
               </button>
             </div>
           )}
 
-          {/* مرحله ۳: موفقیت */}
           {step === 3 && (
             <div className="text-center fade-in-up">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
-                <i className="fa-solid fa-check text-emerald-500 text-3xl"></i>
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                <i className="fa-solid fa-check text-2xl text-emerald-500" />
               </div>
-              <h3 className="text-xl font-bold mb-2 text-[var(--tx-p)]">
-                {lang === 'fa' ? 'خوش آمدید!' : 'Welcome!'}
+              <h3 className="mb-1 text-lg font-bold text-[var(--tx-p)]">
+                {translations.auth.welcome}
               </h3>
               <p className="text-sm text-[var(--tx-s)]">
-                {lang === 'fa' ? 'با موفقیت وارد شدید.' : 'Logged in successfully.'}
+                {translations.auth.success}
               </p>
             </div>
           )}
-
         </div>
       </div>
     </div>
   );
-};
+}

@@ -1,178 +1,395 @@
-'use client'; // این کامپوننت نیاز به تعامل کاربر دارد
+'use client';
 
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useUI } from '~/context/UIContext';
 import { useChat } from '~/context/ChatContext';
+import { useAuth } from '~/context/AuthContext';
+import { useModal } from '~/context/ModalContext';
+import { useToast } from '~/components/ui/Toast';
+import { getTranslations } from '~/lib/i18n';
+import { cn } from '~/lib/utils';
+import type { ToolType } from '~/types/chat';
 
-// توابع کمکی برای تاریخ (به فارسی)
-const getPersianDateLabel = (timestamp: number): string => {
+type DateGroup = 'today' | 'yesterday' | 'previous';
+
+function getDateGroup(timestamp: number): DateGroup {
   const now = new Date();
   const date = new Date(timestamp);
-  
-  const isToday = now.toDateString() === date.toDateString();
-  if (isToday) return 'امروز';
-  
+
+  if (now.toDateString() === date.toDateString()) return 'today';
+
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  const isYesterday = yesterday.toDateString() === date.toDateString();
-  if (isYesterday) return 'دیروز';
-  
-  return 'قبلی'; // برای سادگی فعلاً
-};
+  if (yesterday.toDateString() === date.toDateString()) return 'yesterday';
 
-export const Sidebar: React.FC = () => {
-  // ۱. دریافت وضعیت و متدها از UIContext
-  const { 
-    sidebarOpen, mobileSidebarOpen, theme, lang,
-    toggleSidebar, toggleMobileSidebar, closeMobileSidebar,
-    setTheme, setLang 
+  return 'previous';
+}
+
+export function Sidebar() {
+  const {
+    sidebarOpen,
+    mobileSidebarOpen,
+    theme,
+    lang,
+    toggleSidebar,
+    closeMobileSidebar,
+    setTheme,
+    setLang,
   } = useUI();
-
-  // ۲. دریافت داده‌ها و متدها از ChatContext
-  const { 
-    chats, activeChatId, createNewChat, selectChat, deleteChat 
+  const {
+    chats,
+    activeChatId,
+    createNewChat,
+    startToolChat,
+    selectChat,
+    deleteChat,
   } = useChat();
-
-  // ۳. استیت محلی برای سرچ (فعلاً ساده)
+  const { isLoggedIn, userPhone, plan, imageGenUsed, logout } = useAuth();
+  const { openModal } = useModal();
+  const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const translations = getTranslations(lang);
 
-  // ۴. گروه‌بندی چت‌ها بر اساس تاریخ
-  const groupedChats = chats
-    .filter(chat => chat.title.toLowerCase().includes(searchTerm.toLowerCase()))
-    .reduce((groups, chat) => {
-      const label = getPersianDateLabel(chat.createdAt);
-      if (!groups[label]) groups[label] = [];
-      groups[label].push(chat);
-      return groups;
-    }, {} as Record<string, typeof chats>);
+  const filteredChats = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return chats;
+    return chats.filter((chat) => chat.title.toLowerCase().includes(query));
+  }, [chats, searchTerm]);
 
-  const dateOrders = ['امروز', 'دیروز', 'قبلی'];
+  const groupedChats = useMemo(
+    () =>
+      ({
+        today: filteredChats.filter((chat) => getDateGroup(chat.createdAt) === 'today'),
+        yesterday: filteredChats.filter(
+          (chat) => getDateGroup(chat.createdAt) === 'yesterday',
+        ),
+        previous: filteredChats.filter(
+          (chat) => getDateGroup(chat.createdAt) === 'previous',
+        ),
+      }) satisfies Record<DateGroup, typeof chats>,
+    [filteredChats],
+  );
+
+  const handleNewChat = () => {
+    createNewChat();
+    closeMobileSidebar();
+  };
+
+  const handleToolClick = (mode: ToolType) => {
+    if (!isLoggedIn) {
+      openModal('auth');
+      return;
+    }
+
+    if (mode === 'image' && plan === 'free' && imageGenUsed) {
+      openModal('upsell');
+      return;
+    }
+
+    if (mode === 'video' && plan === 'free') {
+      openModal('upsell');
+      return;
+    }
+
+    startToolChat(mode);
+    closeMobileSidebar();
+  };
+
+  const handleDelete = (id: string) => {
+    deleteChat(id);
+    showToast(lang === 'fa' ? 'چت حذف شد' : 'Chat deleted');
+  };
+
+  const toggleSearch = () => {
+    setSearchOpen((open) => {
+      if (open) setSearchTerm('');
+      return !open;
+    });
+  };
+
+  const renderChatItem = (chat: (typeof chats)[number]) => {
+    const isActive = chat.id === activeChatId;
+    return (
+      <div
+        key={chat.id}
+        className={cn(
+          'sidebar-item group mx-1 mb-0.5 flex cursor-pointer items-center gap-2 px-3 py-2.5',
+          isActive && 'active',
+        )}
+        onClick={() => {
+          selectChat(chat.id);
+          closeMobileSidebar();
+        }}
+      >
+        <i
+          className={cn(
+            'fa-regular fa-message flex-shrink-0 text-xs',
+            isActive ? 'text-brand-500' : 'text-[var(--tx-m)]',
+          )}
+        />
+        <span className="min-w-0 flex-1 truncate text-sm text-[var(--tx-p)]">
+          {chat.title}
+        </span>
+        <button
+          type="button"
+          aria-label={lang === 'fa' ? 'حذف چت' : 'Delete chat'}
+          className="chat-item-delete flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[var(--tx-m)] transition-colors hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30"
+          onClick={(event) => {
+            event.stopPropagation();
+            handleDelete(chat.id);
+          }}
+        >
+          <i className="fa-solid fa-xmark text-xs" />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <>
-      {/* ۵. Overlay برای موبایل (وقتی سایدبار باز است) */}
       {mobileSidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity" 
+        <button
+          type="button"
+          aria-label={lang === 'fa' ? 'بستن منو' : 'Close menu'}
+          className="sidebar-overlay active"
           onClick={closeMobileSidebar}
         />
       )}
 
-      {/* ۶. خود سایدبار (با کلاس‌های ریسپانسیو) */}
-      <aside 
-        className={`
-          sidebar fixed inset-y-0 z-50 flex flex-col h-full bg-[var(--bg-sb)] border-e border-[var(--bc)] transition-transform duration-300 ease-in-out shrink-0 overflow-hidden
-          ${sidebarOpen ? 'w-[280px] translate-x-0' : 'w-0 -translate-x-full md:w-0'}
-          ${mobileSidebarOpen ? 'translate-x-0!' : '-translate-x-full'}
-          md:relative md:translate-x-0
-        `}
-        style={{ minWidth: sidebarOpen ? '280px' : '0' }}
+      <aside
+        className={cn(
+          'sidebar border-e',
+          !sidebarOpen && 'collapsed',
+          mobileSidebarOpen && 'mobile-open',
+        )}
+        aria-label={lang === 'fa' ? 'تاریخچه چت' : 'Chat history'}
       >
-        {/* هدر سایدبار */}
-        <div className="p-3 flex items-center gap-1 min-w-[252px]">
-          <button onClick={toggleMobileSidebar} className="hdr-icon md:hidden">
-            <i className="fa-solid fa-xmark text-base"></i>
-          </button>
-          <button onClick={() => setSearchOpen(prev => !prev)} className="hdr-icon">
-            <i className="fa-solid fa-magnifying-glass text-sm"></i>
-          </button>
-          <button 
-            onClick={() => { createNewChat(); closeMobileSidebar(); }} 
-            className="new-chat-btn flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
+        <div className="flex min-w-[252px] items-center gap-1 p-3">
+          <button
+            type="button"
+            className="hdr-icon"
+            aria-label={lang === 'fa' ? 'بستن سایدبار' : 'Close sidebar'}
+            onClick={toggleSidebar}
           >
-            <i className="fa-solid fa-plus text-xs"></i>
-            <span>چت جدید</span>
+            <i className="fa-solid fa-xmark text-base" />
+          </button>
+          <button
+            type="button"
+            className={cn('hdr-icon', searchOpen && 'bg-[var(--bg-h)]')}
+            aria-label={lang === 'fa' ? 'جستجو' : 'Search'}
+            aria-expanded={searchOpen}
+            onClick={toggleSearch}
+          >
+            <i className="fa-solid fa-magnifying-glass text-sm" />
+          </button>
+          <button
+            type="button"
+            className="new-chat-btn flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium"
+            onClick={handleNewChat}
+          >
+            <i className="fa-solid fa-plus text-xs" />
+            <span>{translations.sidebar.newChat}</span>
           </button>
         </div>
 
-        {/* بخش سرچ داینامیک */}
-        <div className={`search-wrap px-3 pb-1 ${searchOpen ? 'open' : ''}`}>
+        <div className={cn('search-wrap px-3 pb-1', searchOpen && 'open')}>
           <div className="relative">
-            <i className="fa-solid fa-magnifying-glass absolute start-3 top-1/2 -translate-y-1/2 text-[var(--tx-m)] text-xs pointer-events-none hover:text-red-600 transition-colors"></i>
-            <input 
-              type="text" 
+            <i className="fa-solid fa-magnifying-glass pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-xs text-[var(--tx-m)]" />
+            <input
+              type="search"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="search-input text-xs" 
-              placeholder="جستجو در چت‌ها..." 
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="search-input text-xs"
+              placeholder={translations.sidebar.searchPlaceholder}
+              aria-label={translations.sidebar.searchPlaceholder}
+              autoFocus={searchOpen}
             />
           </div>
         </div>
 
-        {/* لیست چت‌ها (با اسکرول) */}
-        <div className="flex-1 overflow-y-auto px-2 pb-2 min-w-[252px] space-y-0.5 mt-1">
+        <div className="min-w-[252px] flex-1 overflow-y-auto px-2 pb-2">
+          <button
+            type="button"
+            className="tool-item"
+            onClick={() => handleToolClick('image')}
+          >
+            <div className="tool-icon bg-violet-100 text-violet-700 dark:bg-violet-200 dark:text-violet-900">
+              <i className="fa-solid fa-wand-magic-sparkles" />
+            </div>
+            <div className="flex-1 text-start">
+              <div className="font-medium text-[13px]">
+                {translations.sidebar.imageGeneration}
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="tool-item"
+            onClick={() => handleToolClick('video')}
+          >
+            <div className="tool-icon bg-rose-100 text-rose-700 dark:bg-rose-200 dark:text-rose-900">
+              <i className="fa-solid fa-clapperboard" />
+            </div>
+            <div className="flex-1 text-start">
+              <div className="font-medium text-[13px]">
+                {translations.sidebar.videoGeneration}
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="tool-item"
+            onClick={() => handleToolClick('site')}
+          >
+            <div className="tool-icon bg-cyan-100 text-cyan-700 dark:bg-cyan-200 dark:text-cyan-900">
+              <i className="fa-solid fa-globe" />
+            </div>
+            <div className="flex-1 text-start">
+              <div className="font-medium text-[13px]">
+                {translations.sidebar.siteGeneration}
+              </div>
+            </div>
+          </button>
+
+          <div className="history-sep" />
+
           {chats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-              <i className="fa-regular fa-comment-dots text-2xl text-[var(--tx-m)] mb-2"></i>
-              <p className="text-xs text-[var(--tx-m)]">هنوز مکالمه‌ای ندارید</p>
+            <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+              <i className="fa-regular fa-comment-dots mb-2 text-2xl text-[var(--tx-m)]" />
+              <p className="text-xs text-[var(--tx-m)]">
+                {translations.sidebar.noChats}
+              </p>
+            </div>
+          ) : filteredChats.length === 0 ? (
+            <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+              <i className="fa-solid fa-magnifying-glass mb-2 text-lg text-[var(--tx-m)]" />
+              <p className="text-xs text-[var(--tx-m)]">
+                {translations.sidebar.noResults}
+              </p>
             </div>
           ) : (
-            dateOrders.map(dateLabel => groupedChats[dateLabel] && (
-              <div key={dateLabel}>
-                <div className="px-3 pt-3 pb-1 text-[11px] font-medium text-[var(--tx-m)] uppercase tracking-wider">
-                  {dateLabel}
-                </div>
-                {groupedChats[dateLabel].map(chat => (
-                  <div 
-                    key={chat.id} 
-                    className={`sidebar-item flex items-center gap-2.5 px-3 py-2.5 mx-1 mb-0.5 cursor-pointer group rounded-lg transition ${chat.id === activeChatId ? 'active bg-[var(--bg-t)]' : 'hover:bg-[var(--bg-h)]'}`}
-                    onClick={() => { selectChat(chat.id); closeMobileSidebar(); }}
-                  >
-                    <i className={`fa-regular fa-message text-xs ${chat.id === activeChatId ? 'text-brand-500' : 'text-[var(--tx-m)]'} flex-shrink-0`}></i>
-                    <span className="text-sm truncate flex-1 text-[var(--tx-p)]">{chat.title}</span>
-                    <button 
-                      className="chat-item-delete w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-[var(--tx-m)] hover:text-red-500 transition-colors flex-shrink-0" 
-                      onClick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
-                    >
-                      <i className="fa-solid fa-xmark text-xs"></i>
-                    </button>
+            ([
+              ['today', translations.sidebar.today],
+              ['yesterday', translations.sidebar.yesterday],
+              ['previous', translations.sidebar.previous],
+            ] as const).map(([key, label]) =>
+              groupedChats[key].length > 0 ? (
+                <div key={key}>
+                  <div className="px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-[var(--tx-m)]">
+                    {label}
                   </div>
-                ))}
-              </div>
-            ))
+                  {groupedChats[key].map(renderChatItem)}
+                </div>
+              ) : null,
+            )
           )}
         </div>
 
-        {/* فوتر سایدبار (تنظیمات) */}
-        <div className="min-w-[252px] p-3 border-t border-[var(--bc)] space-y-1">
-          {/* سوییچ زبان */}
-          <div 
-            className="sidebar-item flex items-center justify-between px-3 py-2.5 cursor-pointer rounded-lg hover:bg-[var(--bg-h)]" 
-            onClick={() => setLang(lang === 'fa' ? 'en' : 'fa')}
-          >
-            <div className="flex items-center gap-3">
-              <i className="fa-solid fa-language text-[var(--tx-m)] text-sm w-5 text-center"></i>
-              <span className="text-sm text-[var(--tx-p)]">{lang === 'fa' ? 'فارسی' : 'English'}</span>
-            </div>
-            <div className={`toggle-track ${lang === 'en' ? 'active bg-brand-500' : 'bg-[var(--bg-t)]'}`}>
-              <div className="toggle-thumb bg-white shadow"></div>
-            </div>
-          </div>
-
-          {/* سوییچ تم */}
-          <div 
-            className="sidebar-item flex items-center justify-between px-3 py-2.5 cursor-pointer rounded-lg hover:bg-[var(--bg-h)]" 
-            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          >
-            <div className="flex items-center gap-3">
-              <i className={`fa-solid ${theme === 'dark' ? 'fa-moon' : 'fa-sun'} text-[var(--tx-m)] text-sm w-5 text-center`}></i>
-              <span className="text-sm text-[var(--tx-p)]">{theme === 'dark' ? 'حالت تاریک' : 'حالت روشن'}</span>
-            </div>
-            <div className={`toggle-track ${theme === 'dark' ? 'active bg-brand-500' : 'bg-[var(--bg-t)]'}`}>
-              <div className="toggle-thumb bg-white shadow"></div>
-            </div>
-          </div>
-          
-          {/* دکمه لاگین (فعلاً ساده) */}
-          <div className="pb-1 pt-2 px-0.5">
-            <button className="sb-login-btn w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border hover:border-brand-500 transition" onClick={() => alert('مودال لاگین باز شود')}>
-              <i className="fa-solid fa-right-to-bracket"></i>
-              <span>ورود / ثبت‌نام</span>
+        <div className="min-w-[252px] border-t border-[var(--bc)] p-3">
+          {isLoggedIn && (
+            <button
+              type="button"
+              className="sb-user-card w-[calc(100%-16px)] text-start"
+              onClick={() => openModal('profile')}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
+                  {userPhone.slice(-2)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold" dir="ltr">
+                    {userPhone}
+                  </div>
+                  <span
+                    className={cn(
+                      'plan-tag',
+                      plan === 'pro' &&
+                        'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400',
+                      plan === 'enterprise' &&
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                      plan === 'free' &&
+                        'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+                    )}
+                  >
+                    {translations.plans[plan].name}
+                  </span>
+                </div>
+              </div>
             </button>
+          )}
+
+          <div className="space-y-0.5">
+            <button
+              type="button"
+              className="sidebar-item flex w-full items-center justify-between px-3 py-2.5"
+              onClick={() => setLang(lang === 'fa' ? 'en' : 'fa')}
+            >
+              <span className="flex items-center gap-3">
+                <i className="fa-solid fa-language w-5 text-center text-sm text-[var(--tx-m)]" />
+                <span className="text-sm text-[var(--tx-p)]">
+                  {lang === 'fa'
+                    ? translations.sidebar.persian
+                    : translations.sidebar.english}
+                </span>
+              </span>
+              <span className={cn('toggle-track', lang === 'fa' && 'active')}>
+                <span className="toggle-thumb" />
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="sidebar-item flex w-full items-center justify-between px-3 py-2.5"
+              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            >
+              <span className="flex items-center gap-3">
+                <i
+                  className={cn(
+                    'fa-solid w-5 text-center text-sm text-[var(--tx-m)]',
+                    theme === 'dark' ? 'fa-sun' : 'fa-moon',
+                  )}
+                />
+                <span className="text-sm text-[var(--tx-p)]">
+                  {theme === 'dark'
+                    ? translations.sidebar.lightTheme
+                    : translations.sidebar.darkTheme}
+                </span>
+              </span>
+              <span className={cn('toggle-track', theme === 'dark' && 'active')}>
+                <span className="toggle-thumb" />
+              </span>
+            </button>
+
+            {isLoggedIn ? (
+              <button
+                type="button"
+                className="sidebar-item flex w-full items-center gap-3 px-3 py-2.5 text-start"
+                onClick={() => {
+                  logout();
+                  showToast(translations.common.logout);
+                }}
+              >
+                <i className="fa-solid fa-right-from-bracket w-5 text-center text-sm text-[var(--tx-m)]" />
+                <span className="text-sm text-[var(--tx-p)]">
+                  {translations.sidebar.logout}
+                </span>
+              </button>
+            ) : (
+              <div className="px-0.5 pb-1 pt-2">
+                <button
+                  type="button"
+                  className="sb-login-btn"
+                  onClick={() => openModal('auth')}
+                >
+                  <i className="fa-solid fa-right-to-bracket" />
+                  <span>{translations.sidebar.login}</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </aside>
     </>
   );
-};
+}

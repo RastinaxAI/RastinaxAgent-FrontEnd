@@ -10,13 +10,25 @@ export default {
     darkMode: 'class',
     theme: {
         extend: {
-            // تعریف فونت‌فمیلی‌ها برای استفاده در کلاس‌های Tailwind
             fontFamily: {
-                fa: ['Vazirmatn', 'sans-serif'],
-                en: ['Space Grotesk', 'sans-serif'],
+                fa: ['B Yekan', 'Vazirmatn', 'sans-serif'],
+                en: ['B Yekan', 'Space Grotesk', 'sans-serif'],
             },
-            // شما رنگ‌های برند را در فایل app.css تعریف کرده‌اید،
-            // بنابراین تیلویند به صورت خودکار از آن‌ها استفاده می‌کند.
+            colors: {
+                brand: {
+                    50: '#f3f4ff',
+                    100: '#e7e8ff',
+                    200: '#d2d4ff',
+                    300: '#afb4ff',
+                    400: '#818cf8',
+                    500: '#6366f1',
+                    600: '#4f46e5',
+                    700: '#4338ca',
+                    800: '#3730a3',
+                    900: '#312e81',
+                    950: '#1e1b4b',
+                },
+            },
         },
     },
     plugins: [

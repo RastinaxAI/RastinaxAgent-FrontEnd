@@ -1,8 +1,9 @@
-import { useRef, useEffect } from 'react';
+import { useEffect } from 'react';
+import type { RefObject } from 'react';
 
 // این هوک یک رفرنس به المنت تِکست‌اِریا و ارتفاع حداکثر را می‌گیرد
 export const useAutoResize = (
-  textareaRef: React.RefObject<HTMLTextAreaElement>,
+  textareaRef: RefObject<HTMLTextAreaElement | null>,
   maxHeight: number = 150
 ) => {
   const resizeTextarea = () => {
@@ -27,7 +28,7 @@ export const useAutoResize = (
   // هر بار که اینپوت تغییر کرد یا رفرنس تنظیم شد، ارتفاع را آپدیت کنیم
   useEffect(() => {
     resizeTextarea();
-  }, [textareaRef]);
+  }, [textareaRef, maxHeight]);
 
   // بازگرداندن متد برای استفاده در زمان تغییر اینپوت توسط کاربر
   return { resizeTextarea };

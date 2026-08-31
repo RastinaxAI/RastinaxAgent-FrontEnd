@@ -1,94 +1,126 @@
-// اصلاح: ایمپورتReact و createContext به صورت جدا
-import React, { createContext, useContext, useState, useEffect } from 'react';
-// اصلاح: ایمپورت ReactNode فقط به عنوان یک TYPE
+'use client';
+
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { Lang } from '~/lib/i18n';
+import { STORAGE_KEYS } from '~/lib/constants';
 
-// تعریف تایپ‌ها برای تم و زبان
-type Theme = 'light' | 'dark';
-type Lang = 'fa' | 'en';
+export type Theme = 'light' | 'dark';
 
-// تعریف اینترفیس برای استیت کانتکست
 interface UIContextType {
-  sidebarOpen: boolean; // وضعیت سایدبار در دسکتاپ
-  mobileSidebarOpen: boolean; // وضعیت سایدبار در موبایل
-  theme: Theme; // تم فعلی
-  lang: Lang; // زبان فعلی
-  toggleSidebar: () => void; // متد سوییچ سایدبار دسکتاپ
-  toggleMobileSidebar: () => void; // متد سوییچ سایدبار موبایل
-  closeMobileSidebar: () => void; // متد بستن سایدبار موبایل (بعد از کلیک روی چت)
-  setTheme: (theme: Theme) => void; // متد تغییر تم
-  setLang: (lang: Lang) => void; // متد تغییر زبان
+  sidebarOpen: boolean;
+  mobileSidebarOpen: boolean;
+  theme: Theme;
+  lang: Lang;
+  toggleSidebar: () => void;
+  toggleMobileSidebar: () => void;
+  closeMobileSidebar: () => void;
+  closeSidebarMobile: () => void;
+  setTheme: (theme: Theme) => void;
+  setLang: (lang: Lang) => void;
 }
 
-// ساخت خود کانتکست با مقدار اولیه undefined
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
-// پیاده‌سازی پرووایدر کانتکست
-export const UIProvider = ({ children }: { children: ReactNode }) => {
-  // تعریف استیت‌ها
+export function UIProvider({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  
-  // لود تم و زبان از localStorage (یا دیفالت)
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('nexchat_theme');
-      return (savedTheme as Theme) || 'light';
-    }
-    return 'light';
-  });
-  
-  const [lang, setLangState] = useState<Lang>(() => {
-    if (typeof window !== 'undefined') {
-      const savedLang = localStorage.getItem('nexchat_lang');
-      return (savedLang as Lang) || 'fa'; // فعلاً دیفالت فارسی
-    }
-    return 'fa';
-  });
+  const [theme, setThemeState] = useState<Theme>('light');
+  const [lang, setLangState] = useState<Lang>('en');
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // اعمال تم و زبان به DOM در زمان تغییر
   useEffect(() => {
-    const root = window.document.documentElement;
+    try {
+      const savedTheme = localStorage.getItem(STORAGE_KEYS.theme);
+      const savedLang = localStorage.getItem(STORAGE_KEYS.language);
+      const savedSidebar = localStorage.getItem(STORAGE_KEYS.sidebar);
+
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        setThemeState(savedTheme);
+      }
+      if (savedLang === 'fa' || savedLang === 'en') {
+        setLangState(savedLang);
+      }
+      if (savedSidebar === 'false' || savedSidebar === 'true') {
+        setSidebarOpen(savedSidebar === 'true');
+      }
+    } catch {
+      // localStorage can be unavailable in private browsing contexts.
+    } finally {
+      setIsHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
-    localStorage.setItem('nexchat_theme', theme);
-  }, [theme]);
+    if (isHydrated) {
+      localStorage.setItem(STORAGE_KEYS.theme, theme);
+    }
+  }, [isHydrated, theme]);
 
   useEffect(() => {
-    const root = window.document.documentElement;
+    const root = document.documentElement;
     root.setAttribute('lang', lang);
     root.setAttribute('dir', lang === 'fa' ? 'rtl' : 'ltr');
-    localStorage.setItem('nexchat_lang', lang);
-  }, [lang]);
+    if (isHydrated) {
+      localStorage.setItem(STORAGE_KEYS.language, lang);
+    }
+  }, [isHydrated, lang]);
 
-  // تعریف متدها
-  const toggleSidebar = () => setSidebarOpen(prev => !prev);
-  const toggleMobileSidebar = () => setMobileSidebarOpen(prev => !prev);
-  const closeMobileSidebar = () => setMobileSidebarOpen(false);
-  const setTheme = (newTheme: Theme) => setThemeState(newTheme);
-  const setLang = (newLang: Lang) => setLangState(newLang);
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem(STORAGE_KEYS.sidebar, String(sidebarOpen));
+    }
+  }, [isHydrated, sidebarOpen]);
 
-  // تجمیع مقادیر برای ارسال به کانتکست
-  const value = {
-    sidebarOpen,
-    mobileSidebarOpen,
-    theme,
-    lang,
-    toggleSidebar,
-    toggleMobileSidebar,
-    closeMobileSidebar,
-    setTheme,
-    setLang,
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setMobileSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const toggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setMobileSidebarOpen((open) => !open);
+      return;
+    }
+    setSidebarOpen((open) => !open);
   };
 
-  return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
-};
+  const toggleMobileSidebar = () => setMobileSidebarOpen((open) => !open);
+  const closeMobileSidebar = () => setMobileSidebarOpen(false);
 
-// ساخت یه هوک سفارشی برای استفاده راحت از کانتکست
-export const useUI = () => {
+  return (
+    <UIContext.Provider
+      value={{
+        sidebarOpen,
+        mobileSidebarOpen,
+        theme,
+        lang,
+        toggleSidebar,
+        toggleMobileSidebar,
+        closeMobileSidebar,
+        closeSidebarMobile: closeMobileSidebar,
+        setTheme: setThemeState,
+        setLang: setLangState,
+      }}
+    >
+      {children}
+    </UIContext.Provider>
+  );
+}
+
+export function useUI() {
   const context = useContext(UIContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useUI must be used within a UIProvider');
   }
   return context;
-};
+}
